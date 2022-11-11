@@ -1,0 +1,17 @@
+#=========================================================================
+# Modular C++ Build System Subproject Makefile Fragment
+#=========================================================================
+# Please read the documenation in 'mcppbs-uguide.txt' for more details
+# on how the Modular C++ Build System works.
+
+simple_intdeps  = @simple_intdeps@
+simple_cppflags = @simple_cppflags@
+simple_ldflags  = @simple_ldflags@
+simple_libs     = @simple_libs@
+
+simple_hdrs = \
+
+simple_srcs = \
+
+simple_install_prog_srcs = \
+  simple-avg.c \
