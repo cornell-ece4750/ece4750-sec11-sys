@@ -276,8 +276,15 @@ to print the name of each test case but not to actually run the test
 cases. With no command line argument, the test program will run all of
 the tests. You can also specify a single test case number to run on the
 command line. A little green dot indicates that one of the
-`ECE4750_CHECK` macros passed. You can run all of the test cases
-associated with a specific subproject like this:
+`ECE4750_CHECK` macros passed. It is very convenient to build and run a
+unit test with a single command like this:
+
+    % cd $TOPDIR/app/build-native
+    % make simple-avg-test && ./simple-avg-test
+
+This way you can rerun the test by just pressing the up arrow key and
+enter. You can run all of the test cases associated with a specific
+subproject like this:
 
     % cd $TOPDIR/app/build-native
     % make check-simple
@@ -402,15 +409,21 @@ This will run all of our software tests on the TinyRV2 ISA simulator
 which gives us confidence that our program has been cross-compiled
 correctly (we already know our program works since we tested in
 natively!). Notice how you can pass command line arguments to the
-cross-compiled program running on the ISA simulator. You can run all of
-the test cases associated with a specific subproject like this:
+cross-compiled program running on the ISA simulator. Again, it is very
+convenient to build and run a unit test with a single command like this:
+
+    % cd $TOPDIR/app/build
+    % make simple-avg-test && ./simple-avg-test
+
+You can run all of the test cases associated with a specific subproject
+like this:
 
     % cd $TOPDIR/app/build
     % make check-simple
 
 And you can run all of the test cases across all subprojects like this:
 
-    % cd $TOPDIR/app/build-native
+    % cd $TOPDIR/app/build
     % make check
 
 Compiling and Cross-Compiling a C Microbenchmark
