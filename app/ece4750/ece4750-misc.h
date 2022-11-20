@@ -15,9 +15,14 @@
 //------------------------------------------------------------------------
 // To avoid warnings/errors about unused variables.
 
-#define ECE4750_UNUSED( x )                               \
-  do {                                                    \
-    __attribute__((__unused__)) int unused_##x = (int) x; \
+#define ECE4750_UNUSED_INT( x )                                         \
+  do {                                                                  \
+    __attribute__((__unused__)) int unused_##x = (int) x;               \
+  } while ( 0 )
+
+#define ECE4750_UNUSED_PTR( x )                                         \
+  do {                                                                  \
+    __attribute__((__unused__)) void* unused_##x = (void*) x;           \
   } while ( 0 )
 
 //------------------------------------------------------------------------

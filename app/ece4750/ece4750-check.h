@@ -70,7 +70,7 @@ extern int ece4750_check_expr1;
 #define ECE4750_CHECK_FAIL( ... )                                       \
   do {                                                                  \
                                                                         \
-    ece4750_wprint_str( ECE4750_RED(L"F") );                            \
+    ece4750_wprint_str( ECE4750_RED(L"FAILED") );                       \
     if ( __n > 0 ) {                                                    \
       ece4750_wprintf( L"\n - [ " ECE4750_RED(L"FAILED") L" ] %S:%d: %S", \
         ECE4750_WFILE, __LINE__ );                                      \
@@ -97,7 +97,7 @@ extern int ece4750_check_expr1;
           ECE4750_STRINGIFY_A2W(expr_), ece4750_check_expr0 );          \
       }                                                                 \
       else                                                              \
-        ece4750_wprint_str( ECE4750_RED(L"F") );                        \
+        ece4750_wprint_str( ECE4750_RED(L"FAILED") );                   \
       ece4750_flush();                                                  \
       ece4750_check_status = 1;                                         \
       return;                                                           \
@@ -130,7 +130,7 @@ extern int ece4750_check_expr1;
           ECE4750_STRINGIFY_A2W(expr_), ece4750_check_expr0 );          \
       }                                                                 \
       else                                                              \
-        ece4750_wprint_str( ECE4750_RED(L"F") );                        \
+        ece4750_wprint_str( ECE4750_RED(L"FAILED") );                   \
       ece4750_flush();                                                  \
       ece4750_check_status = 1;                                         \
       return;                                                           \
@@ -166,7 +166,7 @@ extern int ece4750_check_expr1;
           ece4750_check_expr0, ece4750_check_expr1 );                   \
       }                                                                 \
       else                                                              \
-        ece4750_wprint_str( ECE4750_RED(L"F") );                        \
+        ece4750_wprint_str( ECE4750_RED(L"FAILED") );                   \
       ece4750_flush();                                                  \
       ece4750_check_status = 1;                                         \
       return;                                                           \
