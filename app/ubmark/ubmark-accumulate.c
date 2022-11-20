@@ -2,44 +2,13 @@
 // ubmark-accumulate
 //========================================================================
 
-#include "common.h"
-#include "ubmark-accumulate.dat"
+#include "ubmark-accumulate.h"
 
-//------------------------------------------------------------------------
-// accumulate
-//------------------------------------------------------------------------
-
-__attribute__ ((noinline))
-int accumulate( int *src )
+int ubmark_accumulate( int* src, int size )
 {
-  //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-  // SECTION TASK: Implement an accumulate function
-  //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-  return 0;
+  int sum = 0;
+  for ( int i = 0; i < size; i++ )
+    sum += src[i];
+  return sum;
 }
 
-//------------------------------------------------------------------------
-// verify_results
-//------------------------------------------------------------------------
-
-void verify_results( int sum, int ref )
-{
-  if ( sum != ref )
-    test_fail( 0, sum, ref );
-  test_pass();
-}
-
-//------------------------------------------------------------------------
-// Test Harness
-//------------------------------------------------------------------------
-
-int main( int argc, char* argv[] )
-{
-  test_stats_on();
-  int sum = accumulate( src );
-  test_stats_off();
-
-  verify_results( sum, ref );
-
-  return 0;
-}

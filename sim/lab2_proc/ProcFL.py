@@ -19,65 +19,21 @@ from pymtl3.stdlib.mem         import mk_mem_msg, MemRequesterAdapterFL
 
 from .tinyrv2_encoding import TinyRV2Inst, disassemble_inst
 
-#-------------------------------------------------------------------------
-# IllegalInstruction
-#-------------------------------------------------------------------------
-
-class IllegalInstruction (Exception):
-  pass
-
-#-------------------------------------------------------------------------
-# RegisterFile
-#-------------------------------------------------------------------------
-
 class RegisterFile(object):
 
-  def __init__( self, trace_regs=False ):
-
-    self.regs = [ Bits(32,0) for i in range(32) ]
-
-    self.trace_str  = ""
-    self.trace_regs = trace_regs
-    self.src0 = ""
-    self.src1 = ""
-    self.dest = ""
+  def __init__( self, nregs ):
+    self.regs = [ b32(0) for i in range(nregs) ]
 
   def __getitem__( self, idx ):
-    if self.trace_regs:
-      if self.src0 == "":
-        self.src0 = "X[{:2d}]={}".format( int(idx), self.regs[idx] )
-      else:
-        self.src1 = "X[{:2d}]={}".format( int(idx), self.regs[idx] )
-
     return self.regs[idx]
 
   def __setitem__( self, idx, value ):
-
-    trunc_value = Bits32( int(value), trunc_int=True )
-
-    if self.trace_regs:
-      self.dest = "X[{:2d}]={}".format( int(idx), trunc_value )
-
     if idx != 0:
-      self.regs[idx] = trunc_value
-
-  def trace_regs_str( self ):
-    if self.trace_regs:
-      self.trace_str = " {:14} {:14} {:14}".format( self.dest, self.src0, self.src1 )
-      self.src0 = ""
-      self.src1 = ""
-      self.dest = ""
-      return self.trace_str
-    else:
-      return ""
-
-#-------------------------------------------------------------------------
-# ProcFL
-#-------------------------------------------------------------------------
+      self.regs[idx] = Bits32( int(value), trunc_int=True )
 
 class ProcFL( Component ):
 
-  def construct( s, trace_regs=False, num_cores=1 ):
+  def construct( s, num_cores=1 ):
 
     # Interface
 
@@ -111,7 +67,7 @@ class ProcFL( Component ):
 
     s.PC = b32( 0x200 )
 
-    s.R = RegisterFile(trace_regs=trace_regs)
+    s.R = RegisterFile(32)
     s.raw_inst = None
 
     # We need to save the old PC for line tracing purposes, so that when
@@ -263,7 +219,7 @@ class ProcFL( Component ):
           elif inst.csrnum == 0x7C1:
             s.stats_en @= trunc(s.R[inst.rs1],1)
           else:
-            raise IllegalInstruction(
+            raise TinyRV2Semantics.IllegalInstruction(
               "Unrecognized CSR register ({}) for csrw at PC={}" \
                 .format(inst.csrnum.uint(),s.PC) )
           s.PC += 4
@@ -295,9 +251,6 @@ class ProcFL( Component ):
 
   def line_trace( s ):
     if s.commit_inst:
-      PC_str   = str(s.PC_prev)
-      inst_str = disassemble_inst( s.raw_inst )
-      regs_str = s.R.trace_regs_str()
-      return f"{PC_str:0>8s} {inst_str: <24}{regs_str}"
+      return "{:0>8s} {: <24}".format( str(s.PC_prev), disassemble_inst( s.raw_inst ) )
     return "{}".format( "#".ljust(33) )
 

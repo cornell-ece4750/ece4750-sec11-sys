@@ -10,8 +10,13 @@ simple_ldflags  = @simple_ldflags@
 simple_libs     = @simple_libs@
 
 simple_hdrs = \
+  simple-avg.h \
 
 simple_srcs = \
-
-simple_install_prog_srcs = \
   simple-avg.c \
+
+simple_test_srcs = \
+  simple-avg-test.c \
+
+simple_prog_srcs = \
+  simple-avg-adhoc.c \

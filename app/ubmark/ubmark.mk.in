@@ -10,9 +10,17 @@ ubmark_ldflags  = @ubmark_ldflags@
 ubmark_libs     = @ubmark_libs@
 
 ubmark_hdrs = \
+  ubmark-vvadd.h \
+  ubmark-accumulate.h \
 
 ubmark_srcs = \
-
-ubmark_install_prog_srcs = \
   ubmark-vvadd.c \
   ubmark-accumulate.c \
+
+ubmark_test_srcs = \
+  ubmark-vvadd-test.c \
+  ubmark-accumulate-test.c \
+
+ubmark_prog_srcs = \
+  ubmark-vvadd-eval.c \
+  ubmark-accumulate-eval.c \

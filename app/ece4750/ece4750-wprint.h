@@ -1,9 +1,9 @@
 //========================================================================
-// wprint
+// ece4750-wprint
 //========================================================================
-// A simple subproject that enables TinyRV2 applications to print an
-// integer, character, or string to the terminal as well as a _very_
-// simple wprintf function.
+// A simple implementation of wprint that enables TinyRV2 applications to
+// print an integer, character, or string to the terminal as well as a
+// _very_ simple wprintf function.
 //
 // Note that using chars would require manipulating bytes, but TinyRV2
 // only supports lw/sw. So we instead use wchar_t which is a "wide 4B
@@ -11,17 +11,17 @@
 // with ASCII characters. This does mean that all character literals need
 // to have the L prefix like this:
 //
-//  wprint( L'a'); wprint( L'b'); wprint( L'c');
-//  wprint( L"abc" );
-//  wprintf( L"number=%d, char=%C, string=%S", 42, L'a', L"abc" )
+//  ece4750_wprint( L'a');
+//  ece4750_wprint( L"abc" );
+//  ece4750_wprintf( L"number=%d, char=%C, string=%S", 42, L'a', L"abc" );
+//
+// _RISCV will only be defined when cross-compiling for RISCV.
 //
 
-#ifndef COMMON_WPRINT_H
-#define COMMON_WPRINT_H
+#ifndef ECE4750_WPRINT_H
+#define ECE4750_WPRINT_H
 
-#ifndef _RISCV
 #include <wchar.h>
-#endif
 
 //------------------------------------------------------------------------
 // wprint integer
@@ -31,15 +31,16 @@
 #ifdef _RISCV
 
 inline
-void wprint( int i )
+void ece4750_wprint_int( int i )
 {
-  asm ( "csrw 0x7C0, %0" :: "r"(0x00030000) );
-  asm ( "csrw 0x7C0, %0" :: "r"(i) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(0x00030000) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(i) );
 }
+
 #else
 
 inline
-void wprint( int i )
+void ece4750_wprint_int( int i )
 {
   wprintf( L"%d", i );
 }
@@ -55,16 +56,16 @@ void wprint( int i )
 #ifdef _RISCV
 
 inline
-void wprint( wchar_t c )
+void ece4750_wprint_char( wchar_t c )
 {
-  asm ( "csrw 0x7C0, %0" :: "r"(0x00030001) );
-  asm ( "csrw 0x7C0, %0" :: "r"(c) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(0x00030001) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(c) );
 }
 
 #else
 
 inline
-void wprint( wchar_t c )
+void ece4750_wprint_char( wchar_t c )
 {
   wprintf( L"%C", c );
 }
@@ -80,20 +81,20 @@ void wprint( wchar_t c )
 #ifdef _RISCV
 
 inline
-void wprint( const wchar_t* p )
+void ece4750_wprint_str( const wchar_t* p )
 {
-  asm ( "csrw 0x7C0, %0" :: "r"(0x00030002) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(0x00030002) );
   while ( *p != 0 ) {
-    asm ( "csrw 0x7C0, %0" :: "r"(*p) );
+    __asm__ ( "csrw 0x7c0, %0" :: "r"(*p) );
     p++;
   }
-  asm ( "csrw 0x7C0, %0" :: "r"(*p) );
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(*p) );
 }
 
 #else
 
 inline
-void wprint( const wchar_t* str )
+void ece4750_wprint_str( const wchar_t* str )
 {
   wprintf( L"%S", str );
 }
@@ -112,9 +113,37 @@ void wprint( const wchar_t* str )
 
 #ifdef _RISCV
 
-void wprintf( const wchar_t* fmt... );
+void ece4750_wprintf( const wchar_t* fmt, ... );
+
+#else
+
+#define ece4750_wprintf wprintf
 
 #endif
 
-#endif /* COMMON_WPRINT_H */
+//------------------------------------------------------------------------
+// flush
+//------------------------------------------------------------------------
+// When combining our simulators with the tee program so we can display
+// and log the output, sometimes the output shows up only when the
+// simulation is completely done. We need to flush the output buffer
+// explicitly using the flush function.
+
+#ifdef _RISCV
+
+inline
+void ece4750_flush()
+{
+  __asm__ ( "csrw 0x7c0, %0" :: "r"(0x00030003) );
+}
+
+#else
+
+inline
+void ece4750_flush()
+{ }
+
+#endif
+
+#endif /* ECE4750_WPRINT_H */
 

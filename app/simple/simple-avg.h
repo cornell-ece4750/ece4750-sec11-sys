@@ -1,12 +1,13 @@
 //========================================================================
-// simple average
+// simple average header
 //========================================================================
 
-#include "simple-avg.h"
+#ifndef SIMPLE_AVG_H
+#define SIMPLE_AVG_H
 
-int avg( int x, int y )
-{
-  int sum = x + y;
-  return sum / 2;
-}
+#include "ece4750.h"
+
+int avg( int x, int y );
+
+#endif /* SIMPLE_AVG_H */
 

@@ -19,13 +19,17 @@ class SingleCoreSysFL( Component ):
 
     # Interface
 
-    s.mngr2proc   = IStreamIfc( Bits32 )
-    s.proc2mngr   = OStreamIfc( Bits32 )
-    s.imem        = MemRequesterIfc( MemReqType, MemRespType )
-    s.dmem        = MemRequesterIfc( MemReqType, MemRespType )
+    s.mngr2proc     = IStreamIfc( Bits32 )
+    s.proc2mngr     = OStreamIfc( Bits32 )
+    s.imem          = MemRequesterIfc( MemReqType, MemRespType )
+    s.dmem          = MemRequesterIfc( MemReqType, MemRespType )
 
-    s.commit_inst = OutPort()
-    s.stats_en    = OutPort()
+    s.stats_en      = OutPort()
+    s.commit_inst   = OutPort()
+    s.icache_access = OutPort()
+    s.icache_miss   = OutPort()
+    s.dcache_access = OutPort()
+    s.dcache_miss   = OutPort()
 
     # Instantiate processor and two caches
 
@@ -50,8 +54,12 @@ class SingleCoreSysFL( Component ):
 
     # Bring the stats enable up to the top level
 
-    s.stats_en    //= s.proc.stats_en
-    s.commit_inst //= s.proc.commit_inst
+    s.stats_en      //= s.proc.stats_en
+    s.commit_inst   //= s.proc.commit_inst
+    s.icache_access //= 0
+    s.icache_miss   //= 0
+    s.dcache_access //= 0
+    s.dcache_miss   //= 0
 
   def line_trace( s ):
     return s.proc.line_trace()

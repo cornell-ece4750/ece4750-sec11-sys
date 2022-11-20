@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 #=========================================================================
-# sys-sim [options] <elf-binary>
+# sys-sim [options] <elf-binary> <elf-binary-options>
 #=========================================================================
+#
 # This is the simulator for both the functional-level and RTL models of a
 # single core and multicore system.
 #
-#  -h --help           Display this message
+#  -h --help            Display this message
 #
-#  --impl              {fl,score}
-#  --trace             Display line tracing
-#  --trace-regs        Show regs read/written by each inst
-#  --stats             Display statistics
-#  --dump-vcd          Dump VCD to sys-<impl>-<elf-binary>.vcd
-#  --max-cycles        Set timeout num_cycles, default=100000
+#  --impl               {fl,base,alt}
+#  --trace              Display line tracing
+#  --trace-regs         Show regs read/written by each inst
+#  --stats              Display statistics
+#  --dump-vcd           Dump VCD to sys-<impl>-<elf-binary>.vcd
+#  --max-cycles         Set timeout num_cycles, default=1000000
 #
-#  <elf-binary>        TinyRV2 elf binary file
+#  <elf-binary>         TinyRV2 elf binary file
+#  <elf-binary-options> Options to be pased to simulated program
 #
 # Author : Shunning Jiang, Christopher Batten
 # Date   : Oct 2, 2016
@@ -23,6 +25,7 @@
 
 import os
 import sys
+import struct
 
 sim_dir = os.path.dirname( os.path.abspath( __file__ ) )
 while sim_dir:
@@ -45,7 +48,7 @@ from pymtl3.stdlib.test_utils   import config_model_with_cmdline_opts
 from lab2_proc.tinyrv2_encoding import assemble
 
 from lab4_sys.SingleCoreSysFL   import SingleCoreSysFL
-# from lab4_sys.SingleCoreSys     import SingleCoreSys
+from lab4_sys.SingleCoreSys     import SingleCoreSys
 
 #=========================================================================
 # Command line processing
@@ -65,22 +68,130 @@ def parse_cmdline():
 
   # Standard command line arguments
 
-  p.add_argument( "-h", "--help",               action="store_true"    )
+  p.add_argument( "-h", "--help",          action="store_true"   )
 
   # Additional commane line arguments for the simulator
 
-  p.add_argument( "--impl",  default="fl", choices=["fl","score"] )
-  p.add_argument( "--trace",                action="store_true" )
-  p.add_argument( "--trace-regs",           action="store_true" )
-  p.add_argument( "--stats",                action="store_true" )
-  p.add_argument( "--dump-vcd",             action="store_true" )
-  p.add_argument( "--max-cycles", default=100000, type=int       )
+  p.add_argument( "--impl",  default="fl", choices=["fl","base"] )
+  p.add_argument( "--trace",               action="store_true"   )
+  p.add_argument( "--trace-regs",          action="store_true"   )
+  p.add_argument( "--stats",               action="store_true"   )
+  p.add_argument( "--dump-vcd",            action="store_true"   )
+  p.add_argument( "--max-cycles", default=1000000, type=int      )
 
   p.add_argument( "elf_file" )
 
-  opts = p.parse_args()
+  # We need to figure out which arguments are for the simulator and which
+  # arguments are for the simulated program. Note, we cannot juse use
+  # parse_known_args alone since bogus arguments before the elf binary
+  # would not trigger an error. So we take a two pass approach.
+
+  # First, parse the command line using parse_unused_args so argparse
+  # won't complain about the arguments.
+
+  opts,unused = p.parse_known_args()
+
+  # Second, scan through the original argument list, find the elf binary,
+  # then collect all remaining arguments so we can load them into the
+  # simulated program.
+
+  found_prog = False # set true when found simulated program name
+  sim_argv   = []    # arguments for simulator
+  prog_argv  = []    # arguments for simulated program
+
+  for arg in sys.argv[1:]:
+    if found_prog:
+      prog_argv.append(arg)
+    elif arg == opts.elf_file:
+      sim_argv.append(arg)
+      prog_argv.append(arg)
+      found_prog = True
+    else:
+      sim_argv.append(arg)
+
+  # Third, parse the command line again but only passing in the arguments
+  # meant for the simulator.
+
+  opts = p.parse_args(sim_argv)
+
   if opts.help: p.error()
-  return opts
+  return opts,prog_argv
+
+#=========================================================================
+# Processing Simulated Program Arguments
+#=========================================================================
+# Takes as input a list of strings representing the arguments we should
+# pass to the simulated program and outputs a list of (addr,data) pairs
+# suitable for loading into memory. Both the address and data are 4B.
+# This is what crt0.S is expecting:
+#
+#  address
+#          -------------------------------------------
+#  0xffffc last word in memory
+#          -------------------------------------------
+#          unusedd until last argument
+#          -------------------------------------------
+#          arg(argc-1)  : argument argc-1
+#          ...
+#          arg(1)       : argument 1
+#   offset arg(0)       : argument 0
+#          -------------------------------------------
+#          NULL         : extra null pointer
+#          NULL         : end of argument pointers
+#          argv[argc-1] : argument pointer argc-1
+#          ...
+#          argv[1]      : argument pointer 1
+#          argv[0]      : argument pointer 0
+#  0xff000 argc         : argument count
+#          -------------------------------------------
+
+def convert_prog_argv( prog_argv ):
+
+  addr_data = []
+
+  # argc is just the number of program arguments, so let's go ahead and
+  # add the corresponding (addr,data) pair
+
+  argc = len(prog_argv)
+  addr_data.append(( Bits32(0xff000), Bits32(argc) ))
+
+  # Since we know the number of arguments, we can go ahead and add the
+  # two null pointers.
+
+  addr_data.append(( Bits32( 0xff000 + ((argc+1)*4) ), Bits32(0) ))
+  addr_data.append(( Bits32( 0xff000 + ((argc+2)*4) ), Bits32(0) ))
+
+  # Figure out the offset shown above. We need one word for argc, one
+  # word for the pointer to each argument, and then two words for the
+  # NULL pointers. So the offset is (argc+3)*4B
+
+  offset = 0xff000 + ((argc+3)*4)
+
+  # Add the actual argument strings
+
+  for i,arg in enumerate(prog_argv):
+
+    # First set the pointer based on the offset
+
+    addr_data.append(( Bits32( 0xff000 + ((1+i)*4) ), Bits32(offset) ))
+
+    # Add each character in the string, expending the character to 4B
+
+    for c in arg:
+      addr_data.append(( Bits32(offset), Bits32(ord(c)) ))
+      offset += 4
+
+    # Add final null character
+
+    addr_data.append(( Bits32(offset), Bits32(0) ))
+    offset += 4
+
+  # print for debugging
+
+  # for addr,data in sorted(addr_data,reverse=True):
+  #   print(addr,data)
+
+  return addr_data
 
 #=========================================================================
 # TestHarness
@@ -96,9 +207,15 @@ class TestHarness( Component ):
 
     # Interface
 
-    s.stats_en    = OutPort()
-    s.commit_inst = OutPort()
-    s.proc2mngr   = OStreamIfc( Bits32 )
+    s.proc2mngr     = OStreamIfc( Bits32 )
+
+    s.stats_en      = OutPort()
+    s.commit_inst   = OutPort()
+    s.icache_access = OutPort()
+    s.icache_miss   = OutPort()
+    s.dcache_access = OutPort()
+    s.dcache_miss   = OutPort()
+
 
     # Instantiate source, processor, and memory
 
@@ -126,8 +243,12 @@ class TestHarness( Component ):
 
     # Bring the stats enable up to the top level
 
-    s.stats_en    //= s.sys.stats_en
-    s.commit_inst //= s.sys.commit_inst
+    s.stats_en      //= s.sys.stats_en
+    s.commit_inst   //= s.sys.commit_inst
+    s.icache_access //= s.sys.icache_access
+    s.icache_miss   //= s.sys.icache_miss
+    s.dcache_access //= s.sys.dcache_access
+    s.dcache_miss   //= s.sys.dcache_miss
 
   #-----------------------------------------------------------------------
   # load memory image
@@ -189,13 +310,16 @@ class TestHarness( Component ):
 
 def main():
 
-  opts = parse_cmdline()
+  # Parse commandline, opts are the options for the simulator, while
+  # prog_argv are the arguments for the simulated program
+
+  opts,prog_argv = parse_cmdline()
 
   # Determine which model to use in the simulator
 
   model_impl_dict = {
-    "fl"    : SingleCoreSysFL,
-    # "score" : SingleCoreSys,
+    "fl"   : SingleCoreSysFL,
+    "base" : SingleCoreSys,
   }
 
   # Open elf binary
@@ -203,6 +327,14 @@ def main():
   mem_image = None
   with open(opts.elf_file,'rb') as file_obj:
     mem_image = elf_reader( file_obj )
+
+  # Check binary to see if this is a multicore program
+
+  mcore_en = True
+  try:
+    mem_image.get_section("ece4750_bthreads_enable")
+  except KeyError:
+    mcore_en = False
 
   # Create test harness
 
@@ -236,23 +368,26 @@ def main():
 
   th.load( mem_image )
 
+  # Load the arguments
+
+  prog_argv_addr_data = convert_prog_argv(prog_argv)
+
+  for addr,data in prog_argv_addr_data:
+    th.mem.write_mem( addr, struct.pack('i',data.uint()) )
+
   # Stats
 
-  num_cycles = 0
-  num_insts  = 0
-
-  # Storage for extra three messages on failure
-
-  app_fail_xtra       = False
-  app_fail_xtra_count = 0
-  app_fail_xtra_msgs  = [ None, None, None ]
-
-  commit_inst = [0]*4
+  num_cycles        = 0
+  num_commit_inst   = 0
+  num_icache_access = 0
+  num_icache_miss   = 0
+  num_dcache_access = 0
+  num_dcache_miss   = 0
 
   # Storage for print
 
-  app_print           = False
-  app_print_type      = None  # 0: int, 1: char, 2: string
+  wprint      = False
+  wprint_type = None  # 0: int, 1: char, 2: string
 
   # Reset test harness
 
@@ -266,7 +401,6 @@ def main():
 
   # Run the simulation
 
-  num_insts = 0
   while th.sim_cycle_count() < opts.max_cycles:
 
     # Update cycle count
@@ -274,8 +408,11 @@ def main():
     if th.stats_en:
       num_cycles += 1
 
-      if th.commit_inst:
-        num_insts += 1
+      if th.commit_inst:   num_commit_inst   += 1
+      if th.icache_access: num_icache_access += 1
+      if th.icache_miss:   num_icache_miss   += 1
+      if th.dcache_access: num_dcache_access += 1
+      if th.dcache_miss:   num_dcache_miss   += 1
 
     # Check the proc2mngr interface
 
@@ -284,91 +421,54 @@ def main():
       msg_type = th.proc2mngr.msg[16:32]
       msg_xtra = th.proc2mngr.msg[ 0:16]
 
-      # First we check if we are gathering app_fail_xtra_msgs
+      # Check if we are doing a wprint
 
-      if app_fail_xtra:
-        app_fail_xtra_msgs[ app_fail_xtra_count ] = th.proc2mngr.msg[:]
-        app_fail_xtra_count += 1
-        if app_fail_xtra_count == 3:
-          if opts.trace:
-            th.print_line_trace()
-          print( "" )
-          print( "  [ FAILED ] dest[{0}] != ref[{0}] ({1} != {2})" \
-                  .format( int(app_fail_xtra_msgs[0]),
-                           int(app_fail_xtra_msgs[1]),
-                           int(app_fail_xtra_msgs[2]) ) )
-          print( "" )
-          exit(1)
-
-      # Then we check if we are doing a print
-
-      elif app_print:
+      if wprint:
 
         # Print int
 
-        if app_print_type == 0:
+        if wprint_type == 0:
           print( th.proc2mngr.msg[:].uint(), end='' )
-          app_print = False
+          wprint = False
 
-        if app_print_type == 1:
+        # Print character
+
+        if wprint_type == 1:
           print( chr(th.proc2mngr.msg[:].uint()), end='' )
-          app_print = False
+          if chr(th.proc2mngr.msg[:].uint()) == '\n':
+            sys.stdout.flush()
+          wprint = False
 
-        if app_print_type == 2:
+        # Print string
+
+        if wprint_type == 2:
           char_as_num = th.proc2mngr.msg[:].uint()
           if char_as_num > 0:
             print( chr(char_as_num), end='' )
           else:
-            app_print = False
+            wprint = False
 
-      # Message is from an assembly test
-
-      elif msg_type == 0:
-
-        if msg_xtra == 0:
-          print( "" )
-          print( "  [ passed ]" )
-          print( "" )
-          break
-
-        else:
-          if opts.trace:
-            th.print_line_trace()
-          print( "" )
-          print( f"  [ FAILED ] error on line {msg_xtra.uint()}" )
-          print( "" )
-          exit(1)
-
-      # Message is from a bmark
+      # exit message
 
       elif msg_type == 1:
-
-        if msg_xtra == 0:
-          break
-        else:
-          if opts.trace:
-            th.print_line_trace()
+        if opts.trace:
+          th.print_line_trace()
+        if ( msg_xtra.uint() != 0 ):
           exit( msg_xtra.uint() )
-
-      # Message is from a bmark
-
-      elif msg_type == 2:
-
-        if msg_xtra == 0:
-          print( "" )
-          print( "  [ passed ]" )
-          print( "" )
+        else:
           break
 
-        else:
-          app_fail_xtra = True
-
-      # Message is from print
+      # wprint message
 
       elif msg_type == 3:
-        app_print = True
-        app_print_type = msg_xtra
-        if app_print_type not in [0,1,2]:
+
+        if msg_xtra == 3:
+          sys.stdout.flush()
+        else:
+          wprint = True
+          wprint_type = msg_xtra
+
+        if wprint_type not in [0,1,2,3]:
           if opts.trace:
             th.print_line_trace()
           print("ERROR: received unrecognized app print type!")
@@ -399,16 +499,37 @@ def main():
   # Stats
 
   if opts.stats:
-    if num_insts == 0:
+    if num_commit_inst == 0:
       print("""
     ERROR: stats were never enabled in the program. You need to
-    use test_stats_on() and test_stats_off()
+    use ece4750_stats_on() and ece4750_stats_off()
      """)
     else:
-      cpi = float(num_cycles) / float(num_insts)
-      print( " num_cycles = {}".format( num_cycles ) )
-      print( " num_insts  = {}".format( num_insts ) )
-      print( " CPI        = {:1.2f}".format( cpi ) )
+
+      cpi = 0.0
+      if num_commit_inst > 0:
+        cpi = float(num_cycles) / float(num_commit_inst)
+
+      icache_miss_rate = 0.0
+      if num_icache_access > 0:
+        icache_miss_rate = float(num_icache_miss) / float(num_icache_access)
+
+      dcache_miss_rate = 0.0
+      if num_dcache_access > 0:
+        dcache_miss_rate = float(num_dcache_miss) / float(num_dcache_access)
+
+      print()
+      print( f" num_cycles        = {num_cycles}" )
+      print( f" num_inst          = {num_commit_inst}" )
+      print( f" CPI               = {cpi:1.2f}" )
+      print()
+      print( f" num_icache_access = {num_icache_access} " )
+      print( f" num_icache_miss   = {num_icache_miss} " )
+      print( f" icache_miss_rate  = {icache_miss_rate:1.2f} " )
+      print()
+      print( f" num_dcache_access = {num_dcache_access} " )
+      print( f" num_dcache_miss   = {num_dcache_miss} " )
+      print( f" dcache_miss_rate  = {dcache_miss_rate:1.2f} " )
       print()
 
 main()

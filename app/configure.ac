@@ -13,9 +13,9 @@
 # Project metadata
 #-------------------------------------------------------------------------
 
-m4_define( proj_name,         [ECE4750 Microbenchmark Suite])
-m4_define( proj_maintainer,   [Ji Kim])
-m4_define( proj_abbreviation, [ubmark])
+m4_define( proj_name,         [ECE4750 Software])
+m4_define( proj_maintainer,   [Christopher Batten])
+m4_define( proj_abbreviation, [ece4750])
 
 #-------------------------------------------------------------------------
 # Project version information
@@ -35,7 +35,7 @@ m4_define( proj_version, [?])
 #-------------------------------------------------------------------------
 
 AC_INIT(proj_name,proj_version,proj_maintainer,proj_abbreviation)
-AC_CONFIG_SRCDIR([common/common.h])
+AC_CONFIG_SRCDIR([ece4750/ece4750.h])
 AC_CONFIG_AUX_DIR([scripts])
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
@@ -46,18 +46,13 @@ AC_CANONICAL_HOST
 
 # Check for C compiler and set default C compiler flags
 AC_PROG_CC
-AC_SUBST([CFLAGS],["-Wall -g -O3"])
+AC_SUBST([CFLAGS],["-std=c99 -Wall -Wextra -Wvla -Werror -Werror=vla -Wconversion -Wuninitialized -g -O3"])
 
-# Check for C++ compiler and set default C++ compiler flags
-AC_PROG_CXX
-AS_IF([ test "${host}" != "riscv32-unknown-elf" ],
-  [
-    AC_SUBST([CXXFLAGS],["-Wall -g -O3"])
-  ],[
-    AC_SUBST([CXXFLAGS],["-Wall -g -D_RISCV -fno-builtin -fno-exceptions -fno-rtti -O3 -march=RV32IMXcustom"])
-    AC_SUBST([LDFLAGS], ["-nostdlib -T../scripts/tinyrv2.ld"])
-  ])
-
+AS_IF([ test "${host}" == "riscv32-unknown-elf" ],
+[
+  AC_SUBST([CFLAGS],["-g -O3 -D_RISCV -std=c99 -Wall -Wextra -Wvla -Werror -Werror=vla -Wconversion -Wuninitialized -fno-builtin -march=RV32IMXcustom"])
+  AC_SUBST([LDFLAGS], ["-nostdlib -T../scripts/tinyrv2.ld"])
+])
 
 # Check for tools to build libraries
 AC_CHECK_TOOL([AR],[ar])
@@ -71,22 +66,7 @@ AC_CHECK_TOOL([RANLIB],[ranlib])
 
 MCPPBS_INIT
 
-# Use C++ compiler even for assembly and C source files
-
-#MCPPBS_ALWAYS_USE_CXX
-
-# Checks for install script and the stow program. Setup --enable-stow
-# command line flag for stow-based installs.
-
-MCPPBS_PROG_INSTALL
-
-# Check for an isa simulator with the name host-isa-run or host-run.
-# This simulator will be used for running unit test programs in
-# non-native builds.
-
-MCPPBS_PROG_RUN
-
-AC_SUBST([enable_convert])
+# Check for non-native build
 
 case ${host} in
 
@@ -123,11 +103,10 @@ AC_SUBST([riscv_crosscompile])
 #  MCPPBS_INCLUDE_INTERNAL([sproj-c*])
 #
 
-MCPPBS_INCLUDE_INTERNAL([common])
+MCPPBS_INCLUDE_INTERNAL([ece4750])
 MCPPBS_INCLUDE_INTERNAL([simple])
 MCPPBS_INCLUDE_INTERNAL([ubmark])
 #MCPPBS_INCLUDE_INTERNAL([mtbmark])
-#MCPPBS_INCLUDE_INTERNAL([stbmark])
 
 #-------------------------------------------------------------------------
 # MCPPBS subproject libraries to install

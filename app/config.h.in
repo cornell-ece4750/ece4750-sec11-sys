@@ -1,10 +1,7 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define if we should include subproject common */
-#undef HAVE_COMMON
-
-/* Define if we should include subproject mtbmark */
-#undef HAVE_MTBMARK
+/* Define if we should include subproject ece4750 */
+#undef HAVE_ECE4750
 
 /* Define if we should include subproject simple */
 #undef HAVE_SIMPLE

@@ -1,17 +1,19 @@
 //========================================================================
-// wprint
+// ece4750-wprint
 //========================================================================
 
+#include "ece4750-wprint.h"
+
 //------------------------------------------------------------------------
-// wprintf
+// ece4750_wprintf
 //------------------------------------------------------------------------
 
 #ifdef _RISCV
 
-#include "common-wprint.h"
+#include "ece4750-wprint.h"
 #include <stdarg.h>
 
-void wprintf( const wchar_t* fmt... )
+void ece4750_wprintf( const wchar_t* fmt, ... )
 {
   va_list args;
   va_start(args, fmt);
@@ -22,20 +24,20 @@ void wprintf( const wchar_t* fmt... )
       flag = 1;
     }
     else if ( flag && (*fmt == 'd') ) {
-      wprint( va_arg(args, int) );
+      ece4750_wprint_int( va_arg(args, int) );
       flag = 0;
     }
     else if ( flag && (*fmt == 'C') ) {
       // note automatic conversion to integral type
-      wprint( static_cast<wchar_t>(va_arg(args, int)) );
+      ece4750_wprint_char( (wchar_t) (va_arg(args, int)) );
       flag = 0;
     }
     else if ( flag && (*fmt == 'S') ) {
-      wprint( va_arg(args, wchar_t*) );
+      ece4750_wprint_str( va_arg(args, wchar_t*) );
       flag = 0;
     }
     else {
-      wprint( *fmt );
+      ece4750_wprint_char( *fmt );
     }
     ++fmt;
   }
@@ -48,7 +50,7 @@ void wprintf( const wchar_t* fmt... )
 // the native build won't work. So we create a dummy function for native
 // builds.
 
-int common_( int arg )
+int ece4750_( int arg )
 {
   return arg;
 }
