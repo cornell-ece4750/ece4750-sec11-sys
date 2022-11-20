@@ -43,7 +43,7 @@ inline
 void ece4750_free( void* ptr )
 {
   // don't do anything on RISCV .. can easily run out of memory!
-  ECE4750_UNUSED( ptr );
+  ECE4750_UNUSED_PTR( ptr );
 }
 
 #else

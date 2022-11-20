@@ -48,7 +48,7 @@ from pymtl3.stdlib.test_utils   import config_model_with_cmdline_opts
 from lab2_proc.tinyrv2_encoding import assemble
 
 from lab4_sys.SingleCoreSysFL   import SingleCoreSysFL
-from lab4_sys.SingleCoreSys     import SingleCoreSys
+# from lab4_sys.SingleCoreSys     import SingleCoreSys
 
 #=========================================================================
 # Command line processing
@@ -319,7 +319,7 @@ def main():
 
   model_impl_dict = {
     "fl"   : SingleCoreSysFL,
-    "base" : SingleCoreSys,
+    # "base" : SingleCoreSys,
   }
 
   # Open elf binary
