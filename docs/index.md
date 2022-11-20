@@ -282,6 +282,11 @@ associated with a specific subproject like this:
     % cd $TOPDIR/app/build-native
     % make check-simple
 
+And you can run all of the test cases across all subprojects like this:
+
+    % cd $TOPDIR/app/build-native
+    % make check
+
 Cross-Compiling Compiling a C Test Program
 --------------------------------------------------------------------------
 
@@ -402,6 +407,11 @@ the test cases associated with a specific subproject like this:
 
     % cd $TOPDIR/app/build
     % make check-simple
+
+And you can run all of the test cases across all subprojects like this:
+
+    % cd $TOPDIR/app/build-native
+    % make check
 
 Compiling and Cross-Compiling a C Microbenchmark
 --------------------------------------------------------------------------
@@ -530,8 +540,16 @@ instructions are in the ROI.
 
 Of course, the real goal is to run this microbenchmark on our RTL models.
 You will be creating a single-core system in Lab 4, but just for
-demonstration purposes, here is what it looks like when running this
-microbenchmark on our single-core system.
+demonstration purposes, we can show how to do evaluate this
+microbenchmark on our single-core system. You should start by confirming
+your test program runs correctly on the RTL model of the single-core
+system like this:
+
+    % cd $TOPDIR/app/build
+    % sys-sim --impl base ./ubmark-vvadd-test
+
+Then you can run the evaluation program on the single-core system. Here
+is what it looks like on our single-core system.
 
     % cd $TOPDIR/app/build
     % sys-sim --impl base --stats ./ubmark-vvadd-eval
