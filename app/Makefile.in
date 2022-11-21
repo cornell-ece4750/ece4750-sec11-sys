@@ -47,7 +47,7 @@ LDFLAGS     := @LDFLAGS@
 # C compiler and linker
 
 CC          := @CC@
-COMPILE_C   := $(CC) $(CFLAGS) -funroll-loops -MMD -MP -I. $(CPPFLAGS)
+COMPILE_C   := $(CC) $(CFLAGS) -MMD -MP -I. $(CPPFLAGS)
 LD_C        := $(CC)
 LINK_C      := $(LD_C) -L. $(LDFLAGS)
 

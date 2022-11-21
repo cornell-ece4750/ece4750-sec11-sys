@@ -450,25 +450,32 @@ corresponding assembly.
     % cd $TOPDIR/app/build
     % make ubmark-vvadd-test
     % riscv32-objdump ./ubmark-vvadd-test | less -p "<ubmark_vvadd>:"
+    ...
+    00000ec0 <ubmark_vvadd>:
+      ec0: bge   x0,  x13, eec # -----.
+      ec4: slli  x13, x13, 0x2 #      |
+      ec8: add   x13, x11, x13 #      |
+      ecc: lw    x15, 0(x11)   # <-.  |
+      ed0: lw    x14, 0(x12)   #   |  |
+      ed4: addi  x11, x11, 4   #   |  |
+      ed8: addi  x12, x12, 4   #   |  |
+      edc: add   x15, x15, x14 #   |  |
+      ee0: sw    x15, 0(x10)   #   |  |
+      ee4: addi  x10, x10, 4   #   |  |
+      ee8: bne   x11, x13, ecc # --'  |
+      eec: jalr  x0,  x1,  0   # <----'
 
-We might expect the function to look something like this:
+We have annoted the assembly to show the control flow. The first BGE
+instruction branches directly to the function return if the size is less
+than or equal to zero. The SLLI and ADD create a pointer that points to
+one past the last element in the array. Then we see the expected loads,
+add, stores, and pointer bumps. The key difference from the classic loop
+we study in lecture is that the compiler has elimited the instruction
+used to decrement the loop counter and is instead simply comparing one of
+the array pointers to the pre-calculated "one past the last element"
+pointer.
 
-    loop:
-     lw   x5,  0(x12)
-     lw   x6,  0(x13)
-     add  x7,  x5, x6
-     sw   x7,  0(x11)
-     addi x12, x12, 4
-     addi x13, x13, 4
-     addi x11, x11, 4
-     addi x14, x14, -1
-     bne  x14, 0, loop
-     jalr x1
-
-But you will see that the compiler has heavily optimized the function by
-unrolling the loop to reduce loop overhead and enable scheduling
-instructions to avoid potential RAW stalls. Now let's execute this test
-program on the TinyRV2 ISA simulator:
+Now let's execute this test program on the TinyRV2 ISA simulator:
 
     % cd $TOPDIR/app/build
     % sys-sim ./ubmark-vvadd-test
@@ -567,19 +574,19 @@ is what it looks like on our single-core system.
     % cd $TOPDIR/app/build
     % sys-sim --impl base --stats ./ubmark-vvadd-eval
 
-     num_cycles        = 2640
-     num_inst          = 483
-     CPI               = 5.47
+      num_cycles        = 4258
+      num_inst          = 811
+      CPI               = 5.25
 
-     num_icache_access = 497
-     num_icache_miss   = 23
-     icache_miss_rate  = 0.05
+      num_icache_access = 912
+      num_icache_miss   = 5
+      icache_miss_rate  = 0.01
 
-     num_dcache_access = 301
-     num_dcache_miss   = 75
-     dcache_miss_rate  = 0.25
+      num_dcache_access = 301
+      num_dcache_miss   = 75
+      dcache_miss_rate  = 0.25
 
-There are 483 instructions in the ROI and the CPI is 5.47. The
+There are 811 instructions in the ROI and the CPI is 5.25. The
 instruction cache miss rate is quite low since there is significant
 temporal locality in the vector-vector-add loop. The data cache miss rate
 is 25% which is to be expected. This microbenchmark is streaming through
@@ -597,52 +604,68 @@ For long traces it is often better to save them to a file. You can search
 for `csrw` to jump to where stats are enabled (i.e. the ROI). It can be a
 little complicated to analyze the line trace since the loop has been
 unrolled and aggressively optimized. This is what the line trace looks
-like for a LW, LW, ADD, SW sequence where the memory accesses miss in the
+like for an iteration of the loop where the memory accesses miss in the
 data cache.
 
-           F-stage  D-stage                 X    M    W     icache     dcache     imem  dmem
-    1044: *#       |sw     x05, 0xfec(x14) |    |    |    |(I   [...])(I   [...])      |       # icache request
-    1045: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |       # icache hit!
-    1046: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |       # icache read data
-    1047: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |       # icache response
-    1048: *000003d4|                       |    |sw  |    |(W   [...])(W   [...])      |
-    1049: *#       |lw     x28, 0xff0(x15) |    |    |sw  |(I   [...])(I   [...])      |
-    1050: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |       # dcache request
-    1051: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |       # dcahce miss!
-    1052: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>    # refill request
-    1053: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd  # refill response
-    1054: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |
-    1055: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1056: *000003d8|                       |    |lw  |    |(W   [...])(W   [...])      |       # dcache response
-    1057: *#       |lw     x06, 0xff0(x16) |    |    |lw  |(I   [...])(I   [...])      |
-    1058: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
-    1059: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |
-    1060: *#       |                       |    |#   |    |(W   [...])(EP  [...])      |
-    1061: *#       |                       |    |#   |    |(W   [...])(ER  [...])      |wr>
-    1062: *#       |                       |    |#   |    |(W   [...])(EW  [...])      |  >wr
-    1063: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>
-    1064: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd
-    1065: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |
-    1066: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1067: *000003dc|                       |    |lw  |    |(W   [...])(W   [...])      |
-    1068: *#       |add    x12, x28, x06   |    |    |lw  |(I   [...])(I   [...])      |
-    1069: *#       |                       |add |    |    |(TC h[...])(I   [...])      |
-    1070: *#       |                       |    |add |    |(RD  [...])(I   [...])      |
-    1071: *000003e0|                       |    |    |add |(W   [...])(I   [...])      |
-    1072: *#       |sw     x12, 0xff0(x14) |    |    |    |(I   [...])(I   [...])      |
-    1073: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |
-    1074: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |
-    1075: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>
-    1076: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd
-    1077: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |
-    1078: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |
-    1079: *000003e4|                       |    |sw  |    |(W   [...])(W   [...])      |
-    1080: *#       |lw     x10, 0xff4(x15) |    |    |sw  |(I   [...])(I   [...])      |
-    1081: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
-    1082: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1083: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1084: *000003e8|                       |    |lw  |    |(W   [...])(W   [...])      |
-    1085: *#       |lw     x29, 0xff4(x16) |    |    |lw  |(I   [...])(I   [...])      |
+          F-stage  D-stage                 X    M    W     icache     dcache     imem  dmem
+    497: *#       |                       |    |    |    |(I   [...])(I   [...])      |       # icache request
+    498: *#       |                       |    |    |    |(TC h[...])(I   [...])      |       # icache hit!
+    499: *#       |                       |    |    |    |(RD  [...])(I   [...])      |       # icache read data
+    500: *00000260|                       |    |    |    |(W   [...])(I   [...])      |       # LW F-stage, icache response
+    501: *#       |lw     x15, 0x000(x11) |    |    |    |(I   [...])(I   [...])      |       # LW D-stage
+    502: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |       # LW X-stage, dcache request
+    503: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |       # dcache miss!
+    504: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>    # dcache refill
+    505: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd  # dcache refill
+    506: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |       # dcache refill
+    507: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |       # dcache read data
+    508: *00000264|                       |    |lw  |    |(W   [...])(W   [...])      |       # LW M-stage, dcache response
+    509: *#       |lw     x14, 0x000(x12) |    |    |lw  |(I   [...])(I   [...])      |       # LW W-stage
+    510: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
+    511: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |
+    512: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>
+    513: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd
+    514: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |
+    515: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
+    516: *00000268|                       |    |lw  |    |(W   [...])(W   [...])      |
+    517: *#       |addi   x11, x11, 0x004 |    |    |lw  |(I   [...])(I   [...])      |
+    518: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    519: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    520: *0000026c|                       |    |    |addi|(W   [...])(I   [...])      |
+    521: *#       |addi   x12, x12, 0x004 |    |    |    |(I   [...])(I   [...])      |
+    522: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    523: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    524: *00000270|                       |    |    |addi|(W   [...])(I   [...])      |
+    525: *#       |add    x15, x15, x14   |    |    |    |(I   [...])(I   [...])      |
+    526: *#       |                       |add |    |    |(TC h[...])(I   [...])      |
+    527: *#       |                       |    |add |    |(RD  [...])(I   [...])      |
+    528: *00000274|                       |    |    |add |(W   [...])(I   [...])      |
+    529: *#       |sw     x15, 0x000(x10) |    |    |    |(I   [...])(I   [...])      |
+    530: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |
+    531: *#       |                       |    |#   |    |(RD  [...])(TC m[...])      |
+    532: *#       |                       |    |#   |    |(W   [...])(RR  [...])      |rd>
+    533: *#       |                       |    |#   |    |(W   [...])(RW  [...])      |  >rd
+    534: *#       |                       |    |#   |    |(W   [...])(RU  [...])      |
+    535: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |
+    536: *00000278|                       |    |sw  |    |(W   [...])(W   [...])      |
+    537: *#       |addi   x10, x10, 0x004 |    |    |sw  |(I   [...])(I   [...])      |
+    538: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    539: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    540: *0000027c|                       |    |    |addi|(W   [...])(I   [...])      |       #
+    541: *#       |bne    x11, x13, 0x1fe4|    |    |    |(I   [...])(I   [...])      |       #
+    542: *~       |                       |bne |    |    |(TC h[...])(I   [...])      |       # BNE X-stage, branch taken
+    543: *#       |                       |    |bne |    |(RD  [...])(I   [...])      |       # wait for in-flight icache req
+    544: *#       |                       |    |    |bne |(W   [...])(I   [...])      |       # wait for in-flight icache req
+    545: *#       |                       |    |    |    |(I   [...])(I   [...])      |       # fetch branch target
+    546: *#       |                       |    |    |    |(TC h[...])(I   [...])      |
+    547: *#       |                       |    |    |    |(RD  [...])(I   [...])      |
+    548: *00000260|                       |    |    |    |(W   [...])(I   [...])      |
+    549: *#       |lw     x15, 0x000(x11) |    |    |    |(I   [...])(I   [...])      |
+    550: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
+    551: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
+    552: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
+    553: *00000264|                       |    |lw  |    |(W   [...])(W   [...])      |
+    554: *#       |lw     x14, 0x000(x12) |    |    |lw  |(I   [...])(I   [...])      |
 
 The `*` right before the F stage means that stats are enabled (i.e., we
 are in the ROI). The line trace shows the five-stage pipeline as well as
@@ -650,65 +673,88 @@ the cache FSMs. We have edited out the tag state. You can see that all
 instruction cache accesses are hitting in the cache, but you can clearly
 see the impact of the four-cycle hit latency! Each instruction cache
 access must go through the I->TC->RD->W states. The instruction cache
-access for the first LW goes to the cache on cycle 1044 and it is
-returned on cycle 1047. The processor pipeline is finally able to decode
-the LW on cycle 1049. The four-cycle hit latency means the absolute
-lowest CPI will be 4. On cycle 1050, the LW sends a data memory request
-to the data cache. You can see the data cache go through the
+access for the first LW goes to the cache on cycle 497 and it is returned
+on cycle 500. The processor pipeline is finally able to decode the LW on
+cycle 501. The four-cycle hit latency means the absolute lowest CPI will
+be 4. On cycle 502, the LW is in the X stage and sends a data memory
+request to the data cache. You can see the data cache go through the
 I->TC->RR->RW->RU->RD->W states to handle the miss, and you can see the
-refill read request go to main memory on cycle 1052 and the refill
-response coming back on cycle 1053. Finally, the data is returned from
-memory on cycle 1056. The second LW also misses, but this time it needs
-to do an eviction. The SW also misses. If we count when the first LW is
-fetched on cycle 1048 to when the next LW for the next element is fetch
-on cycle 1079, the total number of cycles to execute these four
-instructions is 31 for a CPI of 31/4 = 7.75.
+refill read request go to main memory on cycle 504 and the refill
+response coming back on cycle 505. Finally, the data is returned from
+memory on cycle 1056. The second LW and the SW also miss. If we count
+when the instruction fetch for the first LW is sent to the icache on
+cycle 497 to when the same thing happens for the first LW in the next
+iteration on cycle 545, the total number of cycles to execute this
+iteration of the loop is 48 for a CPI of 48/8 = 6.
 
-This is what the line trace looks like for a LW, LW, ADD, SW sequence
-where the memory accesses hit in the data cache.
+This is what the line trace looks like for the next iteration of the loop
+when the memory accesses hit in the data cache.
 
-           F-stage  D-stage                 X    M    W     icache     dcache     imem  dmem
-    1006: *#       |sw     x29, 0xfe4(x14) |    |    |    |(I   [...])(I   [...])      |
-    1007: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |
-    1008: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1009: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |
-    1010: *000003b4|                       |    |sw  |    |(W   [...])(W   [...])      |
-    1011: *#       |lw     x30, 0xfe8(x15) |    |    |sw  |(I   [...])(I   [...])      |
-    1012: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
-    1013: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1014: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1015: *000003b8|                       |    |lw  |    |(W   [...])(W   [...])      |
-    1016: *#       |lw     x11, 0xfe8(x16) |    |    |lw  |(I   [...])(I   [...])      |
-    1017: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
-    1018: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1019: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1020: *000003bc|                       |    |lw  |    |(W   [...])(W   [...])      |
-    1021: *#       |add    x31, x30, x11   |    |    |lw  |(I   [...])(I   [...])      |
-    1022: *#       |                       |add |    |    |(TC h[...])(I   [...])      |
-    1023: *#       |                       |    |add |    |(RD  [...])(I   [...])      |
-    1024: *000003c0|                       |    |    |add |(W   [...])(I   [...])      |
-    1025: *#       |sw     x31, 0xfe8(x14) |    |    |    |(I   [...])(I   [...])      |
-    1026: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |
-    1027: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1028: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |
-    1029: *000003c4|                       |    |sw  |    |(W   [...])(W   [...])      |
-    1030: *#       |lw     x13, 0xfec(x15) |    |    |sw  |(I   [...])(I   [...])      |
-    1031: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
-    1032: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
-    1033: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
-    1034: *000003c8|                       |    |lw  |    |(W   [...])(W   [...])      |
-    1035: *#       |lw     x17, 0xfec(x16) |    |    |lw  |(I   [...])(I   [...])      |
+          F-stage  D-stage                 X    M    W     icache     dcache     imem  dmem
+    545: *#       |                       |    |    |    |(I   [...])(I   [...])      |
+    546: *#       |                       |    |    |    |(TC h[...])(I   [...])      |
+    547: *#       |                       |    |    |    |(RD  [...])(I   [...])      |
+    548: *00000260|                       |    |    |    |(W   [...])(I   [...])      |
+    549: *#       |lw     x15, 0x000(x11) |    |    |    |(I   [...])(I   [...])      |
+    550: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
+    551: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
+    552: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
+    553: *00000264|                       |    |lw  |    |(W   [...])(W   [...])      |
+    554: *#       |lw     x14, 0x000(x12) |    |    |lw  |(I   [...])(I   [...])      |
+    555: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
+    556: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
+    557: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
+    558: *00000268|                       |    |lw  |    |(W   [...])(W   [...])      |
+    559: *#       |addi   x11, x11, 0x004 |    |    |lw  |(I   [...])(I   [...])      |
+    560: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    561: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    562: *0000026c|                       |    |    |addi|(W   [...])(I   [...])      |
+    563: *#       |addi   x12, x12, 0x004 |    |    |    |(I   [...])(I   [...])      |
+    564: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    565: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    566: *00000270|                       |    |    |addi|(W   [...])(I   [...])      |
+    567: *#       |add    x15, x15, x14   |    |    |    |(I   [...])(I   [...])      |
+    568: *#       |                       |add |    |    |(TC h[...])(I   [...])      |
+    569: *#       |                       |    |add |    |(RD  [...])(I   [...])      |
+    570: *00000274|                       |    |    |add |(W   [...])(I   [...])      |
+    571: *#       |sw     x15, 0x000(x10) |    |    |    |(I   [...])(I   [...])      |
+    572: *#       |                       |sw  |    |    |(TC h[...])(I   [...])      |
+    573: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
+    574: *#       |                       |    |#   |    |(W   [...])(WR  [...])      |
+    575: *00000278|                       |    |sw  |    |(W   [...])(W   [...])      |
+    576: *#       |addi   x10, x10, 0x004 |    |    |sw  |(I   [...])(I   [...])      |
+    577: *#       |                       |addi|    |    |(TC h[...])(I   [...])      |
+    578: *#       |                       |    |addi|    |(RD  [...])(I   [...])      |
+    579: *0000027c|                       |    |    |addi|(W   [...])(I   [...])      |
+    580: *#       |bne    x11, x13, 0x1fe4|    |    |    |(I   [...])(I   [...])      |
+    581: *~       |                       |bne |    |    |(TC h[...])(I   [...])      |
+    582: *#       |                       |    |bne |    |(RD  [...])(I   [...])      |
+    583: *#       |                       |    |    |bne |(W   [...])(I   [...])      |
+    584: *#       |                       |    |    |    |(I   [...])(I   [...])      |
+    585: *#       |                       |    |    |    |(TC h[...])(I   [...])      |
+    586: *#       |                       |    |    |    |(RD  [...])(I   [...])      |
+    587: *00000260|                       |    |    |    |(W   [...])(I   [...])      |
+    588: *#       |lw     x15, 0x000(x11) |    |    |    |(I   [...])(I   [...])      |
+    589: *#       |                       |lw  |    |    |(TC h[...])(I   [...])      |
+    590: *#       |                       |    |#   |    |(RD  [...])(TC h[...])      |
+    591: *#       |                       |    |#   |    |(W   [...])(RD  [...])      |
+    592: *00000264|                       |    |lw  |    |(W   [...])(W   [...])      |
+    593: *#       |lw     x14, 0x000(x12) |    |    |lw  |(I   [...])(I   [...])      |
 
 Notice that for this sequence, each access to the data cache hits and
-goes through the I->TC->RD/WR->W states. If we count when the first LW is
-fetched on cycle 1010 to when the next LW for the next element is fetch
-on cycle 1029, the total number of cycles to execute these four
-instructions is 19 for a CPI of 31/4 = 4.75.
+goes through the I->TC->RD/WR->W states. If we count when the instruction
+fetch for the first LW is sent to the icache on cycle 545 to when the
+same thing happens for the first LW in the next iteration on cycle 584,
+the total number of cycles to execute this iteration of the loop is 39
+for a CPI of 39/8 = 4.875.
 
-The overall CPI for the microbenchmark is 5.47 which is between the CPI
-for the sequences that miss and the CPI for the sequences that hit which
-makes sense. It should be clear that reducing the instruction fetch hit
-latency is probably the first optimization worth pursuing.
+The arrays in the microbenchmark have a size of 100; 25 of these
+iterations will miss in the cache and take roughly 48 cycles and 75 of
+these iterations will hit in the cache and take 39 cycles for a total of
+25*48+75*39 = 4125 cycles. The actual cycle count is 4258 cycles. The
+difference is because sometimes we need to evict cache lines which
+increases the miss penalty, and there are some instructions before and
+after the loop that need to be executed.
 
 An Accumulate C Microbenchmark
 --------------------------------------------------------------------------
@@ -738,4 +784,3 @@ Now try the evaluation program on the ISA simulator.
 
     % cd $TOPDIR/app/build
     % sys-sim ubmark-accumulate-eval
-
