@@ -14,11 +14,11 @@ ECE 4750 Section 11: Lab 4 Head Start
  - Evaluating a C Microbenchmark
  - An Accumulate C Microbenchmark
 
-This discussion section serves to introduce students to the basic build
-system we will be using to compile and cross-compile programs to run on
-the single- and multi-core processors we will be building in Lab 4. You
-should log into the `ecelinux` servers using the remote access option of
-your choice and then source the setup script.
+This discussion section serves to introduce students to the process we
+will be using to compile, cross-compile, test, and evaluate C programs
+running on the single- and multi-core processors we will be building in
+Lab 4. You should log into the `ecelinux` servers using the remote access
+option of your choice and then source the setup script.
 
     % source setup-ece4750.sh
     % mkdir -p $HOME/ece4750
@@ -310,8 +310,8 @@ our `hello.c` program:
 
 We can cross-compile this program like this:
 
-   % riscv32-unknown-elf-gcc -o hello hello.c
-   % ./hello
+    % riscv32-unknown-elf-gcc -o hello hello.c
+    % ./hello
 
 Instead of using `gcc`, which is the native compiler, we are using
 `riscv32-unknown-elf-gcc` which is the cross-compiler for RISC-V. Note
