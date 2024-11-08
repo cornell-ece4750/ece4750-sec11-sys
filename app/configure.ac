@@ -112,7 +112,7 @@ AC_SUBST([riscv_crosscompile])
 MCPPBS_INCLUDE_INTERNAL([ece4750])
 MCPPBS_INCLUDE_INTERNAL([simple])
 MCPPBS_INCLUDE_INTERNAL([ubmark])
-MCPPBS_INCLUDE_INTERNAL([mtbmark])
+#MCPPBS_INCLUDE_INTERNAL([mtbmark])
 
 #-------------------------------------------------------------------------
 # MCPPBS subproject libraries to install
