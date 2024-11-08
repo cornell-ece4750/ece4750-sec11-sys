@@ -328,7 +328,7 @@ directory we use for native compilation. We also need to give the
 
     % mkdir -p $TOPDIR/app/build
     % cd $TOPDIR/app/build
-    % ../configure --host=riscv32-unknown-elf
+    % ../configure --host=riscv64-linux-gnu LDFLAGS="-nostdlib -nodefaultlibs -nostartfiles"
 
 Now let's cross-compile `simple-avg-adhoc`. The `Makefile` takes care of
 using `riscv32-unknown-elf-gcc`.
