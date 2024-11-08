@@ -46,7 +46,7 @@ int ece4750_rand()
 
 #ifdef _RISCV
 
-#include <wchar.h>
+typedef int wchar_t;
 
 int ece4750_atoi( const char* str )
 {

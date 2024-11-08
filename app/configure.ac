@@ -39,19 +39,25 @@ AC_CONFIG_SRCDIR([ece4750/ece4750.h])
 AC_CONFIG_AUX_DIR([scripts])
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
+AC_MSG_NOTICE([Host detected: $host])
 
 #-------------------------------------------------------------------------
 # Basic checks
 #-------------------------------------------------------------------------
 
 # Check for C compiler and set default C compiler flags
-AC_PROG_CC
-AC_SUBST([CFLAGS],["-std=c99 -Wall -Wextra -Wvla -Werror -Werror=vla -Wconversion -Wuninitialized -g -O3"])
-
-AS_IF([ test "${host}" == "riscv32-unknown-elf" ],
+AS_IF([ test "${host}" = "riscv64-unknown-linux-gnu" || test "${host}" = "riscv64-unknown-elf"],
 [
-  AC_SUBST([CFLAGS],["-g -O3 -D_RISCV -std=c99 -Wall -Wextra -Wvla -Werror -Werror=vla -Wconversion -Wuninitialized -fno-builtin -march=RV32IMXcustom"])
-  AC_SUBST([LDFLAGS], ["-nostdlib -T../scripts/tinyrv2.ld"])
+  AC_SUBST([LDFLAGS], ["-nostdlib -nodefaultlibs -nostartfiles"])
+])
+AC_PROG_CC
+AC_SUBST([CFLAGS],["-std=c99 -Wall -Wextra -Wvla -Werror -Werror=vla -Wno-error=comment -Wconversion -Wuninitialized -g -O3"])
+
+
+AS_IF([ test "${host}" = "riscv64-unknown-linux-gnu" || test "${host}" = "riscv64-unknown-elf" ],
+[
+  AC_SUBST([CFLAGS],["-std=c99 -D_RISCV -Wall -Wextra -Wvla -Werror -Werror=vla -Wno-error=comment -Wconversion -Wuninitialized -march=rv32im_zicsr -mabi=ilp32 -g -O3"])
+  AC_SUBST([LDFLAGS], ["-march=rv32im_zicsr -mabi=ilp32 -nostdlib -T../scripts/tinyrv2.ld"])
 ])
 
 # Check for tools to build libraries
@@ -106,7 +112,7 @@ AC_SUBST([riscv_crosscompile])
 MCPPBS_INCLUDE_INTERNAL([ece4750])
 MCPPBS_INCLUDE_INTERNAL([simple])
 MCPPBS_INCLUDE_INTERNAL([ubmark])
-#MCPPBS_INCLUDE_INTERNAL([mtbmark])
+MCPPBS_INCLUDE_INTERNAL([mtbmark])
 
 #-------------------------------------------------------------------------
 # MCPPBS subproject libraries to install

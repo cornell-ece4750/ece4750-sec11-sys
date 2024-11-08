@@ -1,10 +1,12 @@
 //========================================================================
 // ece4750-malloc
-//========================================================================
+// ========================================================================
 // Very, very simple bump pointer malloc. Very easy to run out of memory.
-// Do not abuse this!
-//
-// _RISCV will only be defined when cross-compiling for RISCV.
+// If you try and malloc too many bytes or the heap reaches the stack it
+// will print out an error and exit the program. This malloc is _not_
+// thread safe. If you call malloc on cores 1-3 it will cause an error.
+// You can use ece4750_get_heap_usage to check if there are any memory
+// leaks.
 
 #ifndef ECE4750_MALLOC_H
 #define ECE4750_MALLOC_H
@@ -15,46 +17,27 @@
 #include <stdlib.h>
 #endif
 
+#ifdef _RISCV
+#define NULL 0
+#endif
+
 //------------------------------------------------------------------------
 // ece4750_malloc
 //------------------------------------------------------------------------
 
-#ifdef _RISCV
-
 void* ece4750_malloc( int mem_size );
-
-#else
-
-inline
-void* ece4750_malloc( int mem_size )
-{
-  return malloc( (size_t) mem_size );
-}
-
-#endif
 
 //------------------------------------------------------------------------
 // ece4750_free
 //------------------------------------------------------------------------
 
-#ifdef _RISCV
+void ece4750_free( void* ptr );
 
-inline
-void ece4750_free( void* ptr )
-{
-  // don't do anything on RISCV .. can easily run out of memory!
-  ECE4750_UNUSED_PTR( ptr );
-}
+//------------------------------------------------------------------------
+// ece4750_get_heap_usage
+//------------------------------------------------------------------------
 
-#else
-
-inline
-void ece4750_free( void* ptr )
-{
-  free( ptr );
-}
-
-#endif
+int ece4750_get_heap_usage();
 
 #endif /* ECE4750_MISC_H */
 

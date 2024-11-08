@@ -21,7 +21,9 @@
 #ifndef ECE4750_WPRINT_H
 #define ECE4750_WPRINT_H
 
-#include <wchar.h>
+#ifndef _RISCV
+  #include <wchar.h>
+#endif
 
 //------------------------------------------------------------------------
 // wprint integer
@@ -29,6 +31,8 @@
 // Print a single integer to the terminal in decimal format.
 
 #ifdef _RISCV
+
+typedef int wchar_t;
 
 inline
 void ece4750_wprint_int( int i )
